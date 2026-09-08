@@ -127,7 +127,8 @@ class CsvGeoFileExporterTest {
                 "dsp:area-of-interest",
                 List.of("csv"),
                 true,
-                new DownloadTerritoryFilterConfig("direct", "territory_level_3_id", null));
+                new DownloadTerritoryFilterConfig("direct", "territory_level_3_id", null),
+                null);
         return new GeoFileExportContext(
                 new Territory(TerritoryLevel.LEVEL_3, "3509502", "Campinas", "35", "São Paulo"),
                 theme,

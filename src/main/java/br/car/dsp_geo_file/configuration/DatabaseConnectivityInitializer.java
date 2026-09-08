@@ -5,7 +5,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.Environment;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 
+import java.net.URI;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -46,6 +53,8 @@ public class DatabaseConnectivityInitializer
             }
         }
 
+        logObjectStorageStatus(env);
+
         List<String> unavailable = new ArrayList<>();
         for (CheckResult result : results) {
             if (!result.operational()) {
@@ -60,6 +69,59 @@ public class DatabaseConnectivityInitializer
         }
 
         log.info("All 3 datasources are operational.");
+        logObjectStorageStatus(env);
+    }
+
+    private void logObjectStorageStatus(Environment env) {
+        log.info("Checking connectivity to object storage (S3 API)...");
+
+        String endpoint = env.getProperty("dsp.object-storage.endpoint");
+        String region = env.getProperty("dsp.object-storage.region", "us-east-1");
+        String bucket = env.getProperty("dsp.object-storage.bucket");
+        String accessKey = env.getProperty("dsp.object-storage.access-key");
+        String secretKey = env.getProperty("dsp.object-storage.secret-key");
+        boolean pathStyleAccess = env.getProperty("dsp.object-storage.path-style-access", Boolean.class, true);
+
+        if (isBlank(endpoint)) {
+            log.error("Object storage status [s3] | endpoint={} | bucket={} | UNAVAILABLE | reason={}",
+                    endpoint, bucket, "dsp.object-storage.endpoint is not configured");
+            return;
+        }
+        if (isBlank(bucket)) {
+            log.error("Object storage status [s3] | endpoint={} | bucket={} | UNAVAILABLE | reason={}",
+                    endpoint, bucket, "dsp.object-storage.bucket is not configured");
+            return;
+        }
+        if (isBlank(accessKey)) {
+            log.error("Object storage status [s3] | endpoint={} | bucket={} | UNAVAILABLE | reason={}",
+                    endpoint, bucket, "dsp.object-storage.access-key is not configured");
+            return;
+        }
+        if (isBlank(secretKey)) {
+            log.error("Object storage status [s3] | endpoint={} | bucket={} | UNAVAILABLE | reason={}",
+                    endpoint, bucket, "dsp.object-storage.secret-key is not configured");
+            return;
+        }
+
+        try (S3Client s3Client = S3Client.builder()
+                .endpointOverride(URI.create(endpoint))
+                .region(Region.of(region))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(accessKey, secretKey)))
+                .serviceConfiguration(S3Configuration.builder()
+                        .pathStyleAccessEnabled(pathStyleAccess)
+                        .build())
+                .build()) {
+            s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+            log.info("Object storage status [s3] | endpoint={} | bucket={} | OPERATIONAL", endpoint, bucket);
+        } catch (Exception ex) {
+            log.error("Object storage status [s3] | endpoint={} | bucket={} | UNAVAILABLE | reason={}",
+                    endpoint, bucket, ex.getMessage());
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private CheckResult check(String name, Environment env, String prefix) {

@@ -84,7 +84,7 @@ class TerritoryFeatureFilterBuilderTest {
     @Test
     void build_RejectsMissingTerritoryFilter() {
         DownloadThemeConfig theme = new DownloadThemeConfig(
-                "area_of_interest", "AOI", "dsp:area-of-interest", List.of("csv"), true, null);
+                "area_of_interest", "AOI", "dsp:area-of-interest", List.of("csv"), true, null, null);
 
         assertThrows(IllegalStateException.class, () -> builder.build(theme, level3()));
     }
@@ -103,7 +103,8 @@ class TerritoryFeatureFilterBuilderTest {
                 "dsp:area-of-interest",
                 List.of("csv"),
                 true,
-                new DownloadTerritoryFilterConfig(strategy, level3Field, aoiLinkField));
+                new DownloadTerritoryFilterConfig(strategy, level3Field, aoiLinkField),
+                null);
     }
 
     private static Territory level2() {

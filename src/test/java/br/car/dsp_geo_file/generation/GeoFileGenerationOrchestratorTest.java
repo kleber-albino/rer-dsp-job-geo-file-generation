@@ -159,7 +159,8 @@ class GeoFileGenerationOrchestratorTest {
                 "dsp:area-of-interest",
                 formats,
                 true,
-                new DownloadTerritoryFilterConfig("direct", "territory_level_3_id", null));
+                new DownloadTerritoryFilterConfig("direct", "territory_level_3_id", null),
+                null);
     }
 
     /** Fixed-answer CSV exporter: the orchestrator's job is the plumbing, not the bytes. */

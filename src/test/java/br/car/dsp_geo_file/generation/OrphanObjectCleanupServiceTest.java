@@ -109,7 +109,8 @@ class OrphanObjectCleanupServiceTest {
                 "dsp:area-of-interest",
                 formats,
                 true,
-                new DownloadTerritoryFilterConfig("direct", "territory_level_3_id", null));
+                new DownloadTerritoryFilterConfig("direct", "territory_level_3_id", null),
+                null);
     }
 
     private static StoredObject object(String key) {

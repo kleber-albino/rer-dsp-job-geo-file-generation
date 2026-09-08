@@ -13,13 +13,14 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Resolves a theme's GeoServer {@code typeName} to the table the migration wrote on
- * {@code dsp-geoserver-db}, and introspects its columns.
+ * Resolves a download theme to the table the migration wrote on {@code dsp-geoserver-db},
+ * and introspects its columns.
  *
- * <p>The layer name is the table name with hyphens ({@code dsp:area-of-interest} →
- * {@code dsp.area_of_interest}) — that is how the migration publishes layers. The mapping is
- * verified against the catalogue instead of assumed, so a theme pointing at a layer that does
- * not exist fails with the table name in the message rather than as an empty file.
+ * <p>GeoServer {@code typeName} ({@code dsp:300m}) is the WFS layer id, not always the
+ * PostGIS table. Extra layers keep the source table name on geo-target ({@code theme_1})
+ * and publish it under {@code nativeName} — same field as {@code mapLayersConfig.json}.
+ * When {@code nativeName} is absent, the local part of {@code typeName} is used
+ * ({@code dsp:area-of-interest} → {@code area_of_interest}).
  */
 @Slf4j
 @Component
@@ -36,7 +37,8 @@ public class FeatureTableResolver {
     }
 
     public FeatureTable resolve(DownloadThemeConfig theme) {
-        return cache.computeIfAbsent(theme.typeName(), typeName -> introspect(tableName(typeName)));
+        String table = tableName(theme);
+        return cache.computeIfAbsent(table, this::introspect);
     }
 
     /** Local part of the {@code typeName}, the prefix GeoServer puts on every feature id. */
@@ -45,8 +47,12 @@ public class FeatureTableResolver {
         return separator < 0 ? typeName : typeName.substring(separator + 1);
     }
 
-    private static String tableName(String typeName) {
-        return featureIdPrefix(typeName).toLowerCase(Locale.ROOT).replace('-', '_');
+    static String tableName(DownloadThemeConfig theme) {
+        String nativeName = theme.nativeName();
+        if (nativeName != null && !nativeName.isBlank()) {
+            return nativeName.trim().toLowerCase(Locale.ROOT).replace('-', '_');
+        }
+        return featureIdPrefix(theme.typeName()).toLowerCase(Locale.ROOT).replace('-', '_');
     }
 
     private FeatureTable introspect(String table) {
