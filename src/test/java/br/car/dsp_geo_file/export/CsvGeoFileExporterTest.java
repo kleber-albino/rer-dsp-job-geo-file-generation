@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -31,8 +32,8 @@ class CsvGeoFileExporterTest {
     void supports_OnlyCsv() {
         assertTrue(exporter.supports("csv"));
         assertTrue(exporter.supports("CSV"));
-        assertEquals(false, exporter.supports("gpkg"));
-        assertEquals(false, exporter.supports(null));
+        assertFalse(exporter.supports("gpkg"));
+        assertFalse(exporter.supports(null));
     }
 
     @Test

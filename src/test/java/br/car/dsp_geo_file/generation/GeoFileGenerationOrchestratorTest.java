@@ -1,6 +1,5 @@
 package br.car.dsp_geo_file.generation;
 
-import br.car.dsp_geo_file.export.FeatureFilter;
 import br.car.dsp_geo_file.export.FeatureTable;
 import br.car.dsp_geo_file.export.FeatureTableResolver;
 import br.car.dsp_geo_file.export.GeneratedGeoFile;

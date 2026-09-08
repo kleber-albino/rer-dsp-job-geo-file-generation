@@ -78,7 +78,7 @@ class FeatureTableResolverTest {
                 nativeName);
     }
 
-    private static JdbcTemplate jdbcWithTable(String existingTable) throws Exception {
+    private static JdbcTemplate jdbcWithTable(String existingTable) {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         doAnswer(invocation -> {
             String table = invocation.getArgument(3);
