@@ -26,8 +26,9 @@ storage com API S3, para que o backend não precise consultar o WFS a cada downl
 
 ## Como funciona
 
-1. A migração (`rer-dsp-job-data-migration`) liga `requires_s3_file_regeneration` nos
-   territórios que mudaram, apenas depois de terminar com sucesso.
+1. A migração ([`rer-dsp-job-data-migration`](https://github.com/Rural-Environmental-Registry/rer-dsp-job-data-migration))
+   liga `requires_s3_file_regeneration` nos territórios que mudaram, apenas depois de terminar
+   com sucesso.
 2. Este job lê os territórios pendentes em `dsp.territory_level_2` / `dsp.territory_level_3`.
 3. Para cada território, percorre os temas habilitados de `downloadThemesConfig.json` e os
    formatos que cada tema declara.

@@ -4,14 +4,21 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -20,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -103,5 +111,94 @@ class S3ObjectStorageClientTest {
                 .thenThrow(NoSuchKeyException.builder().build());
 
         assertTrue(client.get("csv/level-2/missing.csv").isEmpty());
+    }
+
+    @Test
+    void bucketExists_TrueWhenTheBucketAnswers() {
+        when(s3Client.headBucket(any(HeadBucketRequest.class)))
+                .thenReturn(software.amazon.awssdk.services.s3.model.HeadBucketResponse.builder().build());
+
+        assertTrue(client.bucketExists());
+    }
+
+    @Test
+    void bucketExists_FalseOnA404ThatIsNotTypedAsNoSuchBucket() {
+        when(s3Client.headBucket(any(HeadBucketRequest.class)))
+                .thenThrow((S3Exception) S3Exception.builder().statusCode(404).build());
+
+        assertFalse(client.bucketExists());
+    }
+
+    @Test
+    void bucketExists_WrapsAnyOtherFailure() {
+        when(s3Client.headBucket(any(HeadBucketRequest.class)))
+                .thenThrow((S3Exception) S3Exception.builder().statusCode(500).build());
+
+        assertThrows(ObjectStorageException.class, client::bucketExists);
+    }
+
+    @Test
+    void put_WrapsAnyFailure() {
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenThrow(S3Exception.builder().statusCode(500).build());
+
+        assertThrows(ObjectStorageException.class,
+                () -> client.put("csv/level-2/x.csv", new byte[]{1}, "text/csv", Map.of()));
+    }
+
+    @Test
+    void delete_SendsBucketAndKey() {
+        client.delete("csv/level-2/sao-paulo_area_of_interest.csv");
+
+        ArgumentCaptor<DeleteObjectRequest> request = ArgumentCaptor.forClass(DeleteObjectRequest.class);
+        verify(s3Client).deleteObject(request.capture());
+        assertEquals(BUCKET, request.getValue().bucket());
+        assertEquals("csv/level-2/sao-paulo_area_of_interest.csv", request.getValue().key());
+    }
+
+    @Test
+    void delete_WrapsAnyFailure() {
+        when(s3Client.deleteObject(any(DeleteObjectRequest.class)))
+                .thenThrow(S3Exception.builder().statusCode(500).build());
+
+        assertThrows(ObjectStorageException.class, () -> client.delete("csv/level-2/x.csv"));
+    }
+
+    @Test
+    void list_FollowsPaginationAcrossMultiplePages() {
+        S3Object first = S3Object.builder().key("csv/level-2/a.csv").size(10L).build();
+        S3Object second = S3Object.builder().key("csv/level-2/b.csv").size(20L).build();
+
+        when(s3Client.listObjectsV2(argThat((ListObjectsV2Request req) ->
+                req != null && req.continuationToken() == null)))
+                .thenReturn(ListObjectsV2Response.builder()
+                        .contents(first)
+                        .isTruncated(true)
+                        .nextContinuationToken("page-2")
+                        .build());
+        when(s3Client.listObjectsV2(argThat((ListObjectsV2Request req) ->
+                req != null && "page-2".equals(req.continuationToken()))))
+                .thenReturn(ListObjectsV2Response.builder()
+                        .contents(second)
+                        .isTruncated(false)
+                        .build());
+        when(s3Client.listObjectsV2Paginator(any(ListObjectsV2Request.class)))
+                .thenAnswer(invocation -> new ListObjectsV2Iterable(s3Client, invocation.getArgument(0)));
+
+        List<StoredObject> objects = client.list("csv/level-2/");
+
+        assertEquals(2, objects.size());
+        assertEquals("csv/level-2/a.csv", objects.get(0).key());
+        assertEquals(10L, objects.get(0).size());
+        assertEquals("csv/level-2/b.csv", objects.get(1).key());
+        assertEquals(20L, objects.get(1).size());
+    }
+
+    @Test
+    void list_WrapsAnyFailure() {
+        when(s3Client.listObjectsV2Paginator(any(ListObjectsV2Request.class)))
+                .thenThrow(S3Exception.builder().statusCode(500).build());
+
+        assertThrows(ObjectStorageException.class, () -> client.list("csv/level-2/"));
     }
 }
