@@ -11,7 +11,7 @@ flowchart LR
     GeoDb[(dsp-geoserver-db)]
     DspDb[(dsp-db)]
     Job((rer-dsp-job-geo-file-generation))
-    Storage[(Object storage — API S3)]
+    Storage[(Object storage - API S3)]
 
     DspDb -- territórios pendentes --> Job
     GeoDb -- feições --> Job
@@ -74,9 +74,17 @@ Java 21, Spring Boot 3.4.2, Spring Batch, PostgreSQL/PostGIS, AWS SDK v2 (S3), M
 
 ## Configuração
 
-Três datasources (`batch`, `target`, `geo-target`) e o object storage:
+Três datasources (`batch`, `target`, `geo-target`) e o object storage.
+
+O datasource `batch` aponta para o schema **`geo_file_generation`** no `dsp-db` (metadados
+Spring Batch deste job). O schema `data_migration` é exclusivo do
+[job de migração](https://github.com/Rural-Environmental-Registry/rer-dsp-job-data-migration).
 
 ```yaml
+spring:
+  datasource:
+    batch:
+      url: jdbc:postgresql://dsp-db:5432/dsp-db?currentSchema=geo_file_generation
 dsp:
   object-storage:
     endpoint: http://storage:9000   # endpoint da API S3

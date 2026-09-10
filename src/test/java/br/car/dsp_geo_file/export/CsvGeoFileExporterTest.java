@@ -11,8 +11,7 @@ import org.springframework.jdbc.core.RowCallbackHandler;
 import java.nio.charset.StandardCharsets;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,9 +47,8 @@ class CsvGeoFileExporterTest {
         when(row.getString("id")).thenReturn("aoi-1");
         when(row.getString("name")).thenReturn("Sítio Boa Vista");
         when(row.getString("geom")).thenReturn("MULTIPOLYGON(((0 0,1 0,1 1,0 0)))");
-        when(row.getString("updated_at")).thenReturn("2026-03-04 10:00:00+00");
-        when(row.getTimestamp("updated_at")).thenReturn(
-                Timestamp.from(Instant.parse("2026-03-04T10:00:00Z")));
+        when(row.getObject("updated_at", OffsetDateTime.class))
+                .thenReturn(OffsetDateTime.parse("2026-08-18T18:43:48.092583Z"));
 
         GeneratedGeoFile file = exporter.generate(context(singleRow(row)));
 
@@ -59,10 +57,9 @@ class CsvGeoFileExporterTest {
         assertEquals(
                 "FID,id,name,geom,updated_at\r\n"
                         + "area-of-interest.aoi-1,aoi-1,Sítio Boa Vista,"
-                        + "\"MULTIPOLYGON(((0 0,1 0,1 1,0 0)))\",2026-03-04 10:00:00+00\r\n",
+                        + "\"MULTIPOLYGON(((0 0,1 0,1 1,0 0)))\",2026-08-18T18:43:48Z\r\n",
                 csv);
         assertEquals(1L, file.featureCount());
-        assertEquals(Instant.parse("2026-03-04T10:00:00Z"), file.lastUpdate());
     }
 
     @Test
@@ -117,10 +114,10 @@ class CsvGeoFileExporterTest {
                 "dsp.area_of_interest",
                 "id",
                 List.of(
-                        new FeatureTable.FeatureColumn("id", false),
-                        new FeatureTable.FeatureColumn("name", false),
-                        new FeatureTable.FeatureColumn("geom", true),
-                        new FeatureTable.FeatureColumn("updated_at", false)
+                        new FeatureTable.FeatureColumn("id", "varchar"),
+                        new FeatureTable.FeatureColumn("name", "varchar"),
+                        new FeatureTable.FeatureColumn("geom", "geometry"),
+                        new FeatureTable.FeatureColumn("updated_at", "timestamptz")
                 ));
         DownloadThemeConfig theme = new DownloadThemeConfig(
                 "area_of_interest",

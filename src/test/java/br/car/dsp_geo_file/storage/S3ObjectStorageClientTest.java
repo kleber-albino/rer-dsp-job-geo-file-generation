@@ -44,14 +44,14 @@ class S3ObjectStorageClientTest {
         client.put("csv/level-2/sao-paulo_area_of_interest.csv",
                 new byte[]{1, 2, 3},
                 "text/csv;charset=UTF-8",
-                Map.of("last-update", "2026-03-04T10:00:00Z"));
+                Map.of("generated-at", "2026-03-04T10:00:00Z"));
 
         ArgumentCaptor<PutObjectRequest> request = ArgumentCaptor.forClass(PutObjectRequest.class);
         verify(s3Client).putObject(request.capture(), any(RequestBody.class));
         assertEquals(BUCKET, request.getValue().bucket());
         assertEquals("csv/level-2/sao-paulo_area_of_interest.csv", request.getValue().key());
         assertEquals("text/csv;charset=UTF-8", request.getValue().contentType());
-        assertEquals(Map.of("last-update", "2026-03-04T10:00:00Z"), request.getValue().metadata());
+        assertEquals(Map.of("generated-at", "2026-03-04T10:00:00Z"), request.getValue().metadata());
     }
 
     @Test
@@ -61,7 +61,7 @@ class S3ObjectStorageClientTest {
                 HeadObjectResponse.builder()
                         .contentLength(42L)
                         .lastModified(lastModified)
-                        .metadata(Map.of("last-update", "2026-03-01T00:00:00Z"))
+                        .metadata(Map.of("generated-at", "2026-03-01T00:00:00Z"))
                         .build());
 
         Optional<StoredObject> object = client.head("csv/level-2/sao-paulo_area_of_interest.csv");
@@ -69,7 +69,7 @@ class S3ObjectStorageClientTest {
         assertTrue(object.isPresent());
         assertEquals(42L, object.get().size());
         assertEquals(lastModified, object.get().lastModified());
-        assertEquals("2026-03-01T00:00:00Z", object.get().userMetadata().get("last-update"));
+        assertEquals("2026-03-01T00:00:00Z", object.get().userMetadata().get("generated-at"));
     }
 
     @Test

@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 
@@ -31,8 +32,8 @@ import java.util.Map;
 @Service
 public class GeoFileGenerationOrchestrator {
 
-    /** User-metadata carrying the newest feature timestamp; the backend reads it on HeadObject. */
-    public static final String LAST_UPDATE_METADATA = "last-update";
+    /** User-metadata with the PutObject instant; the backend shows it as last file generate. */
+    public static final String GENERATED_AT_METADATA = "generated-at";
 
     private final DownloadThemesService downloadThemesService;
     private final GeoFileExporterRegistry exporterRegistry;
@@ -114,15 +115,12 @@ public class GeoFileGenerationOrchestrator {
             return false;
         }
 
-        objectStorageClient.put(key, file.content(), exporter.contentType(), metadata(file));
+        objectStorageClient.put(key, file.content(), exporter.contentType(), generationMetadata());
         return true;
     }
 
-    private static Map<String, String> metadata(GeneratedGeoFile file) {
-        if (file.lastUpdate() == null) {
-            return Map.of();
-        }
-        return Map.of(LAST_UPDATE_METADATA, file.lastUpdate().toString());
+    private static Map<String, String> generationMetadata() {
+        return Map.of(GENERATED_AT_METADATA, Instant.now().toString());
     }
 
     private static String normalize(String format) {

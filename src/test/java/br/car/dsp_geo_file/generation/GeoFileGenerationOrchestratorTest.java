@@ -27,6 +27,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -50,11 +51,11 @@ class GeoFileGenerationOrchestratorTest {
     private final FeatureTableResolver tableResolver = mock(FeatureTableResolver.class);
 
     @Test
-    void publish_WritesOneObjectPerThemeFormatWithLastUpdateMetadata() {
+    void publish_WritesOneObjectPerThemeFormatWithGeneratedAtMetadata() {
+        Instant before = Instant.now().minusSeconds(1);
         GeneratedGeoFile generated = new GeneratedGeoFile(
                 "FID\r\n".getBytes(StandardCharsets.UTF_8),
-                3L,
-                Instant.parse("2026-03-04T10:00:00Z"));
+                3L);
 
         var result = orchestrator(exporter(generated)).publish(LEVEL_2);
 
@@ -64,20 +65,13 @@ class GeoFileGenerationOrchestratorTest {
                 eq(generated.content()),
                 anyString(),
                 metadata.capture());
-        assertEquals(
-                Map.of(GeoFileGenerationOrchestrator.LAST_UPDATE_METADATA, "2026-03-04T10:00:00Z"),
-                metadata.getValue());
+        String generatedAt = metadata.getValue().get(GeoFileGenerationOrchestrator.GENERATED_AT_METADATA);
+        assertNotNull(generatedAt);
+        Instant parsed = Instant.parse(generatedAt);
+        assertFalse(parsed.isBefore(before));
+        assertFalse(parsed.isAfter(Instant.now().plusSeconds(1)));
         assertEquals(1, result.published());
         assertTrue(result.complete());
-    }
-
-    @Test
-    void publish_OmitsMetadataWhenTheThemeHasNoTimestamp() {
-        GeneratedGeoFile generated = new GeneratedGeoFile(new byte[]{1}, 1L, null);
-
-        orchestrator(exporter(generated)).publish(LEVEL_2);
-
-        verify(storage).put(anyString(), any(), anyString(), eq(Map.of()));
     }
 
     @Test
@@ -105,7 +99,7 @@ class GeoFileGenerationOrchestratorTest {
 
     @Test
     void publish_KeepsTheTerritoryPendingWhenStorageFails() {
-        GeneratedGeoFile generated = new GeneratedGeoFile(new byte[]{1}, 1L, null);
+        GeneratedGeoFile generated = new GeneratedGeoFile(new byte[]{1}, 1L);
         org.mockito.Mockito.doThrow(new ObjectStorageException("endpoint down", new RuntimeException()))
                 .when(storage).put(anyString(), any(), anyString(), any());
 
@@ -140,7 +134,7 @@ class GeoFileGenerationOrchestratorTest {
         when(tableResolver.resolve(any())).thenReturn(new FeatureTable(
                 "dsp.area_of_interest",
                 "id",
-                List.of(new FeatureTable.FeatureColumn("id", false))));
+                List.of(new FeatureTable.FeatureColumn("id", "int4"))));
         return new GeoFileGenerationOrchestrator(
                 themesService,
                 new GeoFileExporterRegistry(List.of(exporter)),
