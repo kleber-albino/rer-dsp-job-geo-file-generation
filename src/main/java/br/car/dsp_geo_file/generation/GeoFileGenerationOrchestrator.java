@@ -18,6 +18,9 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Map;
 
@@ -33,8 +36,12 @@ import java.util.Map;
 @Service
 public class GeoFileGenerationOrchestrator {
 
-    /** User-metadata carrying the newest feature timestamp; the backend reads it on HeadObject. */
-    public static final String LAST_UPDATE_METADATA = "last-update";
+    /** User-metadata with the PutObject instant; the backend shows it as last file generate. */
+    public static final String GENERATED_AT_METADATA = "generated-at";
+
+    private static final DateTimeFormatter GENERATED_AT_FORMAT = DateTimeFormatter
+            .ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
+            .withZone(ZoneOffset.UTC);
 
     private final DownloadThemesService downloadThemesService;
     private final GeoFileExporterRegistry exporterRegistry;
@@ -132,7 +139,8 @@ public class GeoFileGenerationOrchestrator {
             }
 
             try {
-                objectStorageClient.putFile(key, stagingPath, exporter.contentType(), metadata(file));
+                objectStorageClient.putFile(
+                        key, stagingPath, exporter.contentType(), generationMetadata());
                 return true;
             } finally {
                 localStagingService.deleteQuietly(stagingPath);
@@ -143,11 +151,8 @@ public class GeoFileGenerationOrchestrator {
         }
     }
 
-    private static Map<String, String> metadata(GeneratedGeoFile file) {
-        if (file.lastUpdate() == null) {
-            return Map.of();
-        }
-        return Map.of(LAST_UPDATE_METADATA, file.lastUpdate().toString());
+    private static Map<String, String> generationMetadata() {
+        return Map.of(GENERATED_AT_METADATA, GENERATED_AT_FORMAT.format(Instant.now()));
     }
 
     private static String normalize(String format) {
