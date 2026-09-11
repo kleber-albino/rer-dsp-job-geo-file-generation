@@ -11,6 +11,8 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -32,9 +34,12 @@ class S3ObjectStorageClientTest {
     private final S3ObjectStorageClient client = new S3ObjectStorageClient(s3Client, BUCKET);
 
     @Test
-    void put_SendsBucketKeyContentTypeAndUserMetadata() {
-        client.put("csv/level-2/sao-paulo_area_of_interest.csv",
-                new byte[]{1, 2, 3},
+    void putFile_SendsStagingFileToBucket(@org.junit.jupiter.api.io.TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("sao-paulo_area_of_interest.csv");
+        Files.write(file, new byte[]{4, 5, 6});
+
+        client.putFile("csv/level-2/sao-paulo_area_of_interest.csv",
+                file,
                 "text/csv;charset=UTF-8",
                 Map.of("last-update", "2026-03-04T10:00:00Z"));
 

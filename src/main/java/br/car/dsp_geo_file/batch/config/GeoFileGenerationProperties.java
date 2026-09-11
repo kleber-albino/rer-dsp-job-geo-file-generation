@@ -17,4 +17,10 @@ public class GeoFileGenerationProperties {
 
     /** Orphan collection can be turned off while diagnosing the bucket by hand. */
     private boolean orphanCleanupEnabled = true;
+
+    /**
+     * Local directory where files are written before S3 upload.
+     * Subfolders mirror the object key.
+     */
+    private String stagingDir = System.getProperty("java.io.tmpdir") + "/dsp-geo-files";
 }

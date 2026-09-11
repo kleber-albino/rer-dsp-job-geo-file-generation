@@ -6,7 +6,6 @@ import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.launch.JobLauncher;
-import org.springframework.batch.item.ExecutionContext;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
@@ -73,17 +72,15 @@ public class JobRunner implements CommandLineRunner {
             return;
         }
 
-        ExecutionContext context = generationStep.getExecutionContext();
-        int configFailures = context.getInt(GeoFileGenerationContextKeys.PUBLISH_CONFIG_FAILURES, 0);
-        int transientFailures = context.getInt(GeoFileGenerationContextKeys.PUBLISH_TRANSIENT_FAILURES, 0);
-        int territoriesWithFailures = context.getInt(GeoFileGenerationContextKeys.TERRITORIES_WITH_FAILURES, 0);
-        int totalFailures = configFailures + transientFailures;
+        var context = generationStep.getExecutionContext();
+        var status = GeoFileGenerationExitStatusResolver.fromGenerationStepContext(context);
+        int totalFailures = context.getInt(GeoFileGenerationContextKeys.PUBLISH_CONFIG_FAILURES, 0)
+                + context.getInt(GeoFileGenerationContextKeys.PUBLISH_TRANSIENT_FAILURES, 0);
 
         if (totalFailures > 0) {
-            log.error("[GEO_PUBLISH_SUMMARY] territoriesWithFailures={} configFailures={} transientFailures={}",
-                    territoriesWithFailures, configFailures, transientFailures);
+            log.error("[GEO_PUBLISH_SUMMARY] {}", status.getExitDescription());
         } else {
-            log.info("[GEO_PUBLISH_SUMMARY] no publish failures");
+            log.info("[GEO_PUBLISH_SUMMARY] {}", status.getExitDescription());
         }
     }
 }

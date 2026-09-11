@@ -5,10 +5,13 @@ import br.car.dsp_geo_file.territory.TerritoryLevel;
 import br.car.dsp_geo_file.theme.DownloadTerritoryFilterConfig;
 import br.car.dsp_geo_file.theme.DownloadThemeConfig;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -86,6 +89,22 @@ class CsvGeoFileExporterTest {
 
         assertTrue(file.isEmpty());
         assertEquals(0, file.content().length);
+    }
+
+    @Test
+    void writeToFile_WritesSameContentAsGenerate(@TempDir Path tempDir) throws Exception {
+        ResultSet row = mock(ResultSet.class);
+        when(row.getString("id")).thenReturn("aoi-1");
+        when(row.getString("name")).thenReturn("Sítio Boa Vista");
+        when(row.getString("geom")).thenReturn("POINT(0 0)");
+        when(row.getTimestamp("updated_at")).thenReturn(
+                Timestamp.from(Instant.parse("2026-03-04T10:00:00Z")));
+
+        Path target = tempDir.resolve("campinas_area.csv");
+        GeneratedGeoFile file = exporter.writeToFile(context(singleRow(row)), target);
+
+        assertFalse(file.isEmpty());
+        assertEquals(new String(file.content(), StandardCharsets.UTF_8), Files.readString(target));
     }
 
     @Test

@@ -16,10 +16,14 @@ import br.car.dsp_geo_file.territory.TerritoryLevel;
 import br.car.dsp_geo_file.theme.DownloadTerritoryFilterConfig;
 import br.car.dsp_geo_file.theme.DownloadThemeConfig;
 import br.car.dsp_geo_file.theme.DownloadThemesService;
+import br.car.dsp_geo_file.batch.config.GeoFileGenerationProperties;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +49,9 @@ class GeoFileGenerationOrchestratorTest {
     private static final Territory LEVEL_2 =
             new Territory(TerritoryLevel.LEVEL_2, "35", "São Paulo", null, null);
 
+    @TempDir
+    Path stagingDir;
+
     private final ObjectStorageClient storage = mock(ObjectStorageClient.class);
     private final DownloadThemesService themesService = mock(DownloadThemesService.class);
     private final FeatureTableResolver tableResolver = mock(FeatureTableResolver.class);
@@ -59,11 +66,13 @@ class GeoFileGenerationOrchestratorTest {
         var result = orchestrator(exporter(generated)).publish(LEVEL_2);
 
         ArgumentCaptor<Map<String, String>> metadata = ArgumentCaptor.forClass(Map.class);
-        verify(storage).put(
+        ArgumentCaptor<Path> stagingPath = ArgumentCaptor.forClass(Path.class);
+        verify(storage).putFile(
                 eq("csv/level-2/sao-paulo_area_of_interest.csv"),
-                eq(generated.content()),
+                stagingPath.capture(),
                 anyString(),
                 metadata.capture());
+        assertTrue(stagingPath.getValue().toString().contains("sao-paulo_area_of_interest.csv"));
         assertEquals(
                 Map.of(GeoFileGenerationOrchestrator.LAST_UPDATE_METADATA, "2026-03-04T10:00:00Z"),
                 metadata.getValue());
@@ -77,7 +86,7 @@ class GeoFileGenerationOrchestratorTest {
 
         orchestrator(exporter(generated)).publish(LEVEL_2);
 
-        verify(storage).put(anyString(), any(), anyString(), eq(Map.of()));
+        verify(storage).putFile(anyString(), any(Path.class), anyString(), eq(Map.of()));
     }
 
     @Test
@@ -89,7 +98,7 @@ class GeoFileGenerationOrchestratorTest {
         var result = orchestrator(exporter(GeneratedGeoFile.empty())).publish(LEVEL_2);
 
         verify(storage).delete(key);
-        verify(storage, never()).put(anyString(), any(), anyString(), any());
+        verify(storage, never()).putFile(anyString(), any(Path.class), anyString(), any());
         assertEquals(1, result.emptied());
         assertTrue(result.complete());
     }
@@ -107,7 +116,7 @@ class GeoFileGenerationOrchestratorTest {
     void publish_KeepsTheTerritoryPendingWhenStorageFails() {
         GeneratedGeoFile generated = new GeneratedGeoFile(new byte[]{1}, 1L, null);
         org.mockito.Mockito.doThrow(new ObjectStorageException("endpoint down", new RuntimeException()))
-                .when(storage).put(anyString(), any(), anyString(), any());
+                .when(storage).putFile(anyString(), any(Path.class), anyString(), any());
 
         var result = orchestrator(exporter(generated)).publish(LEVEL_2);
 
@@ -115,6 +124,7 @@ class GeoFileGenerationOrchestratorTest {
         assertEquals(0, result.configFailures());
         assertEquals(1, result.transientFailures());
         assertFalse(result.complete());
+        assertFalse(Files.exists(stagingDir.resolve("csv/level-2/sao-paulo_area_of_interest.csv")));
     }
 
     @Test
@@ -128,6 +138,7 @@ class GeoFileGenerationOrchestratorTest {
                 tableResolver,
                 new TerritoryFeatureFilterBuilder(),
                 new S3ObjectKeyBuilder(),
+                stagingService(),
                 storage,
                 null).publish(LEVEL_2);
 
@@ -135,7 +146,7 @@ class GeoFileGenerationOrchestratorTest {
         assertEquals(1, result.configFailures());
         assertEquals(0, result.transientFailures());
         assertFalse(result.complete());
-        verify(storage, never()).put(anyString(), any(), anyString(), any());
+        verify(storage, never()).putFile(anyString(), any(Path.class), anyString(), any());
     }
 
     @Test
@@ -147,6 +158,7 @@ class GeoFileGenerationOrchestratorTest {
                 tableResolver,
                 new TerritoryFeatureFilterBuilder(),
                 new S3ObjectKeyBuilder(),
+                stagingService(),
                 storage,
                 null);
 
@@ -155,7 +167,13 @@ class GeoFileGenerationOrchestratorTest {
         assertEquals(0, result.published());
         assertEquals(0, result.failed());
         assertTrue(result.complete());
-        verify(storage, never()).put(anyString(), any(), anyString(), any());
+        verify(storage, never()).putFile(anyString(), any(Path.class), anyString(), any());
+    }
+
+    private LocalStagingService stagingService() {
+        GeoFileGenerationProperties properties = new GeoFileGenerationProperties();
+        properties.setStagingDir(stagingDir.toString());
+        return new LocalStagingService(properties);
     }
 
     private GeoFileGenerationOrchestrator orchestrator(GeoFileExporter exporter) {
@@ -170,6 +188,7 @@ class GeoFileGenerationOrchestratorTest {
                 tableResolver,
                 new TerritoryFeatureFilterBuilder(),
                 new S3ObjectKeyBuilder(),
+                stagingService(),
                 storage,
                 null);
     }

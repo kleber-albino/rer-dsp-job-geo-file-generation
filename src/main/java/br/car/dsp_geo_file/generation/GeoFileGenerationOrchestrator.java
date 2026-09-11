@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 
@@ -39,6 +41,7 @@ public class GeoFileGenerationOrchestrator {
     private final FeatureTableResolver featureTableResolver;
     private final TerritoryFeatureFilterBuilder filterBuilder;
     private final S3ObjectKeyBuilder keyBuilder;
+    private final LocalStagingService localStagingService;
     private final ObjectStorageClient objectStorageClient;
     private final JdbcTemplate geoTargetJdbcTemplate;
 
@@ -48,6 +51,7 @@ public class GeoFileGenerationOrchestrator {
             FeatureTableResolver featureTableResolver,
             TerritoryFeatureFilterBuilder filterBuilder,
             S3ObjectKeyBuilder keyBuilder,
+            LocalStagingService localStagingService,
             ObjectStorageClient objectStorageClient,
             @Qualifier("geoTargetJdbcTemplate") JdbcTemplate geoTargetJdbcTemplate) {
         this.downloadThemesService = downloadThemesService;
@@ -55,6 +59,7 @@ public class GeoFileGenerationOrchestrator {
         this.featureTableResolver = featureTableResolver;
         this.filterBuilder = filterBuilder;
         this.keyBuilder = keyBuilder;
+        this.localStagingService = localStagingService;
         this.objectStorageClient = objectStorageClient;
         this.geoTargetJdbcTemplate = geoTargetJdbcTemplate;
     }
@@ -106,25 +111,36 @@ public class GeoFileGenerationOrchestrator {
                                String format,
                                GeoFileExporter exporter) {
         String key = keyBuilder.build(format, territory, theme.code(), exporter.fileExtension());
-        GeneratedGeoFile file = exporter.generate(new GeoFileExportContext(
-                territory,
-                theme,
-                featureTableResolver.resolve(theme),
-                filterBuilder.build(theme, territory),
-                geoTargetJdbcTemplate
-        ));
+        Path stagingPath = localStagingService.resolvePath(key);
+        try {
+            GeneratedGeoFile file = exporter.writeToFile(new GeoFileExportContext(
+                    territory,
+                    theme,
+                    featureTableResolver.resolve(theme),
+                    filterBuilder.build(theme, territory),
+                    geoTargetJdbcTemplate
+            ), stagingPath);
 
-        if (file.isEmpty()) {
-            // No features left in the cut: a stale object would keep answering downloads
-            // the WFS itself would refuse.
-            if (objectStorageClient.head(key).isPresent()) {
-                objectStorageClient.delete(key);
+            if (file.isEmpty()) {
+                // No features left in the cut: a stale object would keep answering downloads
+                // the WFS itself would refuse.
+                if (objectStorageClient.head(key).isPresent()) {
+                    objectStorageClient.delete(key);
+                }
+                localStagingService.deleteQuietly(stagingPath);
+                return false;
             }
-            return false;
-        }
 
-        objectStorageClient.put(key, file.content(), exporter.contentType(), metadata(file));
-        return true;
+            try {
+                objectStorageClient.putFile(key, stagingPath, exporter.contentType(), metadata(file));
+                return true;
+            } finally {
+                localStagingService.deleteQuietly(stagingPath);
+            }
+        } catch (IOException ex) {
+            localStagingService.deleteQuietly(stagingPath);
+            throw new RuntimeException("Failed to stage file for " + key, ex);
+        }
     }
 
     private static Map<String, String> metadata(GeneratedGeoFile file) {

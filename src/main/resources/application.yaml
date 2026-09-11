@@ -56,6 +56,7 @@ dsp:
 geo-file-generation:
   chunk-size: 1
   orphan-cleanup-enabled: true
+  staging-dir: /tmp/dsp-geo-files
 
 execution-jobs:
   geo-file-generation-job: true
