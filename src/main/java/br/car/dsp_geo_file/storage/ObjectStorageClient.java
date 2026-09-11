@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The five S3 operations this product needs. Everything above this interface — key layout,
+ * The six S3 operations this product needs. Everything above this interface — key layout,
  * exporters, orphan cleanup — is written against the contract, never against a provider SDK.
  */
 public interface ObjectStorageClient {

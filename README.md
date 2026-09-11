@@ -11,7 +11,7 @@ flowchart LR
     GeoDb[(dsp-geoserver-db)]
     DspDb[(dsp-db)]
     Job((rer-dsp-job-geo-file-generation))
-    Storage[(Object storage — API S3)]
+    Storage[(Object storage - API S3)]
 
     DspDb -- territórios pendentes --> Job
     GeoDb -- feições --> Job
@@ -26,15 +26,16 @@ storage com API S3, para que o backend não precise consultar o WFS a cada downl
 
 ## Como funciona
 
-1. A migração (`rer-dsp-job-data-migration`) liga `requires_s3_file_regeneration` nos
-   territórios que mudaram, apenas depois de terminar com sucesso.
+1. A migração ([`rer-dsp-job-data-migration`](https://github.com/Rural-Environmental-Registry/rer-dsp-job-data-migration))
+   liga `requires_s3_file_regeneration` nos territórios que mudaram, apenas depois de terminar
+   com sucesso.
 2. Este job lê os territórios pendentes em `dsp.territory_level_2` / `dsp.territory_level_3`.
 3. Para cada território, percorre os temas habilitados de `downloadThemesConfig.json` e os
    formatos que cada tema declara.
 4. Exporta o arquivo lendo `dsp-geoserver-db` — a mesma base que o WFS lê, o que é o que
    mantém o conteúdo equivalente.
-5. Publica em `{formato}/{nível}/{slug}_{tema}.{ext}` com o timestamp da feição mais recente
-   em user-metadata.
+5. Publica em `{formato}/{nível}/{slug}_{tema}.{ext}` com `generated-at` (instante do
+   PutObject, ISO UTC) em user-metadata — o backend usa isso como `lastFileGenerated`.
 6. Só quando todos os formatos habilitados do território foram publicados é que
    `requires_s3_file_regeneration` volta a `false` e `last_generated_s3_file_at` é gravado.
    Falha parcial mantém o território pendente para a próxima execução.
@@ -73,9 +74,17 @@ Java 21, Spring Boot 3.4.2, Spring Batch, PostgreSQL/PostGIS, AWS SDK v2 (S3), M
 
 ## Configuração
 
-Três datasources (`batch`, `target`, `geo-target`) e o object storage:
+Três datasources (`batch`, `target`, `geo-target`) e o object storage.
+
+O datasource `batch` aponta para o schema **`geo_file_generation`** no `dsp-db` (metadados
+Spring Batch deste job). O schema `data_migration` é exclusivo do
+[job de migração](https://github.com/Rural-Environmental-Registry/rer-dsp-job-data-migration).
 
 ```yaml
+spring:
+  datasource:
+    batch:
+      url: jdbc:postgresql://dsp-db:5432/dsp-db?currentSchema=geo_file_generation
 dsp:
   object-storage:
     endpoint: http://storage:9000   # endpoint da API S3
