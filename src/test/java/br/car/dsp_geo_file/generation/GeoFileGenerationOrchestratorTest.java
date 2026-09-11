@@ -112,7 +112,30 @@ class GeoFileGenerationOrchestratorTest {
         var result = orchestrator(exporter(generated)).publish(LEVEL_2);
 
         assertEquals(1, result.failed());
+        assertEquals(0, result.configFailures());
+        assertEquals(1, result.transientFailures());
         assertFalse(result.complete());
+    }
+
+    @Test
+    void publish_CountsConfigurationErrorsSeparatelyFromTransientFailures() {
+        when(themesService.getEnabledThemes()).thenReturn(List.of(theme(List.of("csv"))));
+        when(tableResolver.resolve(any())).thenThrow(new IllegalStateException("table not migrated"));
+
+        var result = new GeoFileGenerationOrchestrator(
+                themesService,
+                new GeoFileExporterRegistry(List.of(exporter(new GeneratedGeoFile(new byte[]{1}, 1L, null)))),
+                tableResolver,
+                new TerritoryFeatureFilterBuilder(),
+                new S3ObjectKeyBuilder(),
+                storage,
+                null).publish(LEVEL_2);
+
+        assertEquals(1, result.failed());
+        assertEquals(1, result.configFailures());
+        assertEquals(0, result.transientFailures());
+        assertFalse(result.complete());
+        verify(storage, never()).put(anyString(), any(), anyString(), any());
     }
 
     @Test

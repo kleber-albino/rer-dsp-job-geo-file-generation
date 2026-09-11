@@ -62,7 +62,8 @@ public class GeoFileGenerationOrchestrator {
     public TerritoryPublishResult publish(Territory territory) {
         int published = 0;
         int emptied = 0;
-        int failed = 0;
+        int configFailures = 0;
+        int transientFailures = 0;
 
         for (DownloadThemeConfig theme : downloadThemesService.getEnabledThemes()) {
             if (theme.formats() == null) {
@@ -81,14 +82,22 @@ public class GeoFileGenerationOrchestrator {
                     } else {
                         emptied++;
                     }
+                } catch (IllegalStateException ex) {
+                    configFailures++;
+                    log.error("[GEO_PUBLISH_CONFIG_ERROR] territory={} level={} theme={} format={} "
+                                    + "exception={} message={}",
+                            territory.id(), territory.level(), theme.code(), format,
+                            ex.getClass().getSimpleName(), ex.getMessage(), ex);
                 } catch (RuntimeException ex) {
-                    failed++;
-                    log.error("Failed to publish territory={} theme={} format={}: {}",
-                            territory.id(), theme.code(), format, ex.getMessage(), ex);
+                    transientFailures++;
+                    log.error("[GEO_PUBLISH_FAILURE] territory={} level={} theme={} format={} "
+                                    + "exception={} message={}",
+                            territory.id(), territory.level(), theme.code(), format,
+                            ex.getClass().getSimpleName(), ex.getMessage(), ex);
                 }
             }
         }
-        return new TerritoryPublishResult(published, emptied, failed);
+        return new TerritoryPublishResult(published, emptied, configFailures, transientFailures);
     }
 
     /** True when an object was written, false when the cut is empty and the object was removed. */
@@ -129,11 +138,19 @@ public class GeoFileGenerationOrchestrator {
         return format == null ? null : format.trim().toLowerCase(Locale.ROOT);
     }
 
-    /** What happened for one territory; {@code failed} zero is what allows clearing the flag. */
-    public record TerritoryPublishResult(int published, int emptied, int failed) {
+    /** What happened for one territory; {@code failed() == 0} is what allows clearing the flag. */
+    public record TerritoryPublishResult(
+            int published,
+            int emptied,
+            int configFailures,
+            int transientFailures) {
+
+        public int failed() {
+            return configFailures + transientFailures;
+        }
 
         public boolean complete() {
-            return failed == 0;
+            return failed() == 0;
         }
     }
 }
