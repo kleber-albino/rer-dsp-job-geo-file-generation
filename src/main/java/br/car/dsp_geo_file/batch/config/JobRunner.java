@@ -45,8 +45,11 @@ public class JobRunner implements CommandLineRunner {
                 .toJobParameters());
         long durationMs = System.currentTimeMillis() - startedAt;
 
-        log.info("Job {} finished with status={} in {} ms",
-                geoFileGenerationJob.getName(), execution.getStatus(), durationMs);
+        log.info("Job {} finished with status={} exitCode={} in {} ms",
+                geoFileGenerationJob.getName(),
+                execution.getStatus(),
+                execution.getExitStatus().getExitCode(),
+                durationMs);
         for (Throwable failure : execution.getAllFailureExceptions()) {
             log.error("Job {} failure: {}",
                     geoFileGenerationJob.getName(), failure.getMessage(), failure);

@@ -1,6 +1,7 @@
 package br.car.dsp_geo_file.batch.writer;
 
 import br.car.dsp_geo_file.batch.config.GeoFileGenerationContextKeys;
+import br.car.dsp_geo_file.batch.config.GeoFileGenerationExitStatusResolver;
 import br.car.dsp_geo_file.generation.GeoFileGenerationOrchestrator;
 import br.car.dsp_geo_file.territory.Territory;
 import br.car.dsp_geo_file.territory.TerritoryFileStateRepository;
@@ -41,19 +42,20 @@ public class TerritoryGeoFileWriter implements ItemWriter<Territory>, StepExecut
 
     @Override
     public ExitStatus afterStep(StepExecution stepExecution) {
-        return stepExecution.getExitStatus();
+        return GeoFileGenerationExitStatusResolver.fromGenerationStepContext(
+                stepExecution.getExecutionContext());
     }
 
     @Override
     public void write(Chunk<? extends Territory> chunk) {
         for (Territory territory : chunk) {
             var result = orchestrator.publish(territory);
+            accumulateResult(result);
             if (result.complete()) {
                 territoryRepository.markGenerated(territory.level(), territory.id());
                 log.info("Territory {} ({}) done — {} file(s) published, {} empty cut(s)",
                         territory.id(), territory.level(), result.published(), result.emptied());
             } else {
-                accumulateFailures(result);
                 log.error("[GEO_TERRITORY_PENDING] territory={} level={} configFailures={} "
                                 + "transientFailures={} attempts={}",
                         territory.id(),
@@ -65,11 +67,23 @@ public class TerritoryGeoFileWriter implements ItemWriter<Territory>, StepExecut
         }
     }
 
-    private void accumulateFailures(GeoFileGenerationOrchestrator.TerritoryPublishResult result) {
+    private void accumulateResult(GeoFileGenerationOrchestrator.TerritoryPublishResult result) {
         if (stepExecution == null) {
             return;
         }
         var context = stepExecution.getExecutionContext();
+        context.putInt(
+                GeoFileGenerationContextKeys.FILES_PUBLISHED,
+                context.getInt(GeoFileGenerationContextKeys.FILES_PUBLISHED, 0) + result.published());
+        context.putInt(
+                GeoFileGenerationContextKeys.FILES_EMPTIED,
+                context.getInt(GeoFileGenerationContextKeys.FILES_EMPTIED, 0) + result.emptied());
+        if (result.complete()) {
+            context.putInt(
+                    GeoFileGenerationContextKeys.TERRITORIES_COMPLETED,
+                    context.getInt(GeoFileGenerationContextKeys.TERRITORIES_COMPLETED, 0) + 1);
+            return;
+        }
         context.putInt(
                 GeoFileGenerationContextKeys.PUBLISH_CONFIG_FAILURES,
                 context.getInt(GeoFileGenerationContextKeys.PUBLISH_CONFIG_FAILURES, 0)

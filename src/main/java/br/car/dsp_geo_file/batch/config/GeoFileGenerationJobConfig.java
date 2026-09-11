@@ -27,15 +27,18 @@ import org.springframework.transaction.PlatformTransactionManager;
 public class GeoFileGenerationJobConfig {
 
     public static final String JOB_NAME = "geoFileGenerationJob";
+    public static final String OBJECT_STORAGE_READINESS_STEP = "objectStorageReadinessStep";
     public static final String GEO_FILE_GENERATION_STEP = "geoFileGenerationStep";
 
     @Bean
     public Job geoFileGenerationJob(JobRepository jobRepository,
                                     StorageReadyDecider storageReadyDecider,
+                                    GeoFileGenerationJobListener geoFileGenerationJobListener,
                                     Step objectStorageReadinessStep,
                                     Step geoFileGenerationStep,
                                     Step orphanObjectCleanupStep) {
         return new JobBuilder(JOB_NAME, jobRepository)
+                .listener(geoFileGenerationJobListener)
                 .start(objectStorageReadinessStep)
                 .next(storageReadyDecider)
                 .on(StorageReadyDecider.PROCESS).to(geoFileGenerationStep)
@@ -50,10 +53,12 @@ public class GeoFileGenerationJobConfig {
     public Step objectStorageReadinessStep(JobRepository jobRepository,
                                            PlatformTransactionManager transactionManager,
                                            ObjectStorageClient objectStorageClient,
-                                           ObjectStorageProperties objectStorageProperties) {
-        return new StepBuilder("objectStorageReadinessStep", jobRepository)
+                                           ObjectStorageProperties objectStorageProperties,
+                                           ObjectStorageReadinessStepListener objectStorageReadinessStepListener) {
+        return new StepBuilder(OBJECT_STORAGE_READINESS_STEP, jobRepository)
                 .tasklet(new ObjectStorageReadinessTasklet(
                         objectStorageClient, objectStorageProperties.getBucket()), transactionManager)
+                .listener(objectStorageReadinessStepListener)
                 .build();
     }
 
