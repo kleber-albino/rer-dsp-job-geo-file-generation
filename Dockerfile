@@ -41,16 +41,13 @@ RUN apt-get update && apt-get upgrade -y \
 COPY --from=build /app/target/dsp-geo-file-generation-*.jar /app/app.jar
 
 COPY --from=dsp_config docker/select-runtime-config.sh /tmp/select-runtime-config.sh
-COPY --from=dsp_config Job-Geo-File-Generation/application/ /tmp/geo-file-app/
 COPY --from=dsp_config Job-Geo-File-Generation/docker/entrypoint.sh /geo-file-entrypoint.sh
 COPY --from=dsp_config downloads/ /tmp/downloads/
 RUN chmod +x /tmp/select-runtime-config.sh /geo-file-entrypoint.sh \
     && mkdir -p /config \
-    && /tmp/select-runtime-config.sh pick /tmp/geo-file-app application.yaml /config/application.yaml \
     && /tmp/select-runtime-config.sh pick /tmp/downloads downloadThemesConfig.json /config/downloadThemesConfig.json \
-    && rm -rf /tmp/geo-file-app /tmp/downloads /tmp/select-runtime-config.sh
+    && rm -rf /tmp/downloads /tmp/select-runtime-config.sh
 
-ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0" \
-    SPRING_MAIN_WEB_APPLICATION_TYPE=none
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
 
 ENTRYPOINT ["/geo-file-entrypoint.sh"]
